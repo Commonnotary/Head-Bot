@@ -13,14 +13,13 @@ Setup:
 """
 
 import sys
-import os
 import argparse
 from rich.console import Console
 from rich.panel import Panel
-from rich.text import Text
 from rich.rule import Rule
 from rich.prompt import Prompt
 from rich.markdown import Markdown
+from rich.live import Live
 
 from config.settings import COMPANY_NAME, COMPANY_EMAIL, COMPANY_PHONE, ANTHROPIC_API_KEY
 from agents.head_bot import HeadBot
@@ -84,18 +83,37 @@ def print_help(operator_mode: bool) -> None:
         console.print(Panel(CUSTOMER_COMMANDS, border_style="green"))
 
 
-def format_bot_response(response: str) -> None:
-    """Display the bot's response with nice formatting."""
+def stream_bot_response(stream_gen) -> str:
+    """
+    Stream the bot's response in real time using Rich Live.
+    Characters appear as they arrive — no waiting for the full reply.
+    Returns the complete text for any post-processing needed.
+    """
     console.print()
-    console.print(
+    buffer = ""
+    with Live(
         Panel(
-            Markdown(response),
+            Markdown(buffer or " "),
             title=f"[bold blue]{COMPANY_NAME}[/bold blue]",
             border_style="blue",
             padding=(1, 2),
-        )
-    )
+        ),
+        console=console,
+        refresh_per_second=20,
+        vertical_overflow="visible",
+    ) as live:
+        for chunk in stream_gen:
+            buffer += chunk
+            live.update(
+                Panel(
+                    Markdown(buffer),
+                    title=f"[bold blue]{COMPANY_NAME}[/bold blue]",
+                    border_style="blue",
+                    padding=(1, 2),
+                )
+            )
     console.print()
+    return buffer
 
 
 def show_context(bot: HeadBot) -> None:
@@ -121,9 +139,8 @@ def run_operator_email_request(bot: HeadBot) -> None:
         f"Please draft an email for a customer named {customer_name}. "
         f"Instructions: {instructions}"
     )
-    console.print("\n[dim]Generating email draft...[/dim]\n")
-    response = bot.chat(message)
-    format_bot_response(response)
+    console.print()
+    stream_bot_response(bot.chat_stream(message))
 
 
 def main() -> None:
@@ -146,12 +163,11 @@ def main() -> None:
 
     # Auto-greet the customer on first launch in customer mode
     if not operator_mode:
-        console.print("[dim]Connecting you to our customer service team...[/dim]\n")
-        greeting = bot.chat(
+        console.print("[dim]Connecting you to our customer service team...[/dim]")
+        stream_bot_response(bot.chat_stream(
             "A new customer has just started a chat session. Please greet them warmly, "
             "introduce Common Notary Apostille, and ask how you can help them today."
-        )
-        format_bot_response(greeting)
+        ))
 
     # Main chat loop
     while True:
@@ -187,10 +203,8 @@ def main() -> None:
                     print_help(operator_mode)
                     continue
 
-            # Send message to Head Bot
-            console.print("[dim]Processing...[/dim]")
-            response = bot.chat(user_input)
-            format_bot_response(response)
+            # Send message to Head Bot — streams characters in real time
+            stream_bot_response(bot.chat_stream(user_input))
 
         except KeyboardInterrupt:
             console.print("\n\n[dim]Session interrupted. Goodbye![/dim]\n")

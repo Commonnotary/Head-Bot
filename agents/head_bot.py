@@ -294,6 +294,12 @@ and demonstrate our expertise.
 """
 
 
+# Cached system prompt — sent once, reused across turns at no extra latency cost
+_CACHED_HEAD_SYSTEM = [
+    {"type": "text", "text": HEAD_BOT_SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}
+]
+
+
 # ── Head Bot class ────────────────────────────────────────────────────────────
 
 class HeadBot:
@@ -380,71 +386,76 @@ class HeadBot:
         else:
             return f"Unknown tool: {tool_name}"
 
-    def chat(self, user_message: str) -> str:
+    def _run_tool_use_iterations(self, messages: list[dict]) -> list[dict]:
         """
-        Process a customer message through the Head Bot orchestration loop.
-
-        Args:
-            user_message: The incoming message from the customer (or operator)
-        Returns:
-            The final synthesized response to show the customer
+        Run all tool-use iterations (non-streaming) until the model is ready
+        to give its final response.  Returns the messages list with tool results
+        appended, ready for the final streaming call.
         """
-        # Add user message to history
-        self.conversation_history.append({"role": "user", "content": user_message})
-
-        # Agentic loop — keep going until the model stops calling tools
-        messages = list(self.conversation_history)
-
         while True:
             response = self.client.messages.create(
                 model=HEAD_BOT_MODEL,
                 max_tokens=2048,
-                system=HEAD_BOT_SYSTEM_PROMPT,
+                system=_CACHED_HEAD_SYSTEM,
                 tools=TOOLS,
                 messages=messages,
             )
 
-            # If the model is done (no more tool calls), extract the final text
-            if response.stop_reason == "end_turn":
-                final_text = ""
-                for block in response.content:
-                    if hasattr(block, "text"):
-                        final_text += block.text
-                # Store assistant response in conversation history
-                self.conversation_history.append(
-                    {"role": "assistant", "content": final_text}
-                )
-                return final_text
+            if response.stop_reason != "tool_use":
+                # Not a tool call — the model is ready to give the final answer.
+                # Return messages as-is so the caller can do a streaming final call.
+                return messages
 
-            # Process tool calls
-            if response.stop_reason == "tool_use":
-                # Add the assistant's response (with tool use blocks) to messages
-                messages.append({"role": "assistant", "content": response.content})
+            # Process all tool calls in this response
+            messages = messages + [{"role": "assistant", "content": response.content}]
+            tool_results = []
+            for block in response.content:
+                if block.type == "tool_use":
+                    result = self._dispatch_tool(block.name, block.input)
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": result,
+                    })
+            messages = messages + [{"role": "user", "content": tool_results}]
 
-                # Execute each tool and collect results
-                tool_results = []
-                for block in response.content:
-                    if block.type == "tool_use":
-                        tool_result = self._dispatch_tool(block.name, block.input)
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": tool_result,
-                        })
+    def chat_stream(self, user_message: str):
+        """
+        Generator that yields text chunks as the final response streams in.
 
-                # Add tool results to messages and continue the loop
-                messages.append({"role": "user", "content": tool_results})
+        Workflow:
+          1. Run all tool-use iterations with create() (fast, cached)
+          2. Stream the final synthesis response character-by-character
+        This gives customers the fastest possible time-to-first-token on the
+        answer they actually see, while tool dispatch runs silently behind the scenes.
+        """
+        self.conversation_history.append({"role": "user", "content": user_message})
+        messages = list(self.conversation_history)
 
-            else:
-                # Unexpected stop reason — extract whatever text we have
-                final_text = ""
-                for block in response.content:
-                    if hasattr(block, "text"):
-                        final_text += block.text
-                self.conversation_history.append(
-                    {"role": "assistant", "content": final_text}
-                )
-                return final_text or "I apologize — something went wrong. Please try again."
+        # Phase 1: resolve all tool calls silently
+        messages = self._run_tool_use_iterations(messages)
+
+        # Phase 2: stream the final answer in real time
+        full_text = ""
+        with self.client.messages.stream(
+            model=HEAD_BOT_MODEL,
+            max_tokens=2048,
+            system=_CACHED_HEAD_SYSTEM,
+            tools=TOOLS,
+            messages=messages,
+        ) as stream:
+            for chunk in stream.text_stream:
+                full_text += chunk
+                yield chunk
+
+        self.conversation_history.append({"role": "assistant", "content": full_text})
+
+    def chat(self, user_message: str) -> str:
+        """
+        Non-streaming version of chat_stream() — collects all chunks and returns
+        the full response as a single string.  Used internally and for testing.
+        """
+        return "".join(self.chat_stream(user_message))
 
     def reset(self) -> None:
         """Clear conversation history and context for a new customer session."""

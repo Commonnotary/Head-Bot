@@ -55,6 +55,9 @@ they just need to send us the right documents.
 """
 
 
+_CACHED_DOC_SYSTEM = [{"type": "text", "text": DOCUMENT_SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}]
+
+
 def advise_on_documents(
     document_types: list[str],
     context: dict,
@@ -89,7 +92,7 @@ def advise_on_documents(
     response = client.messages.create(
         model=AGENT_MODEL,
         max_tokens=1024,
-        system=DOCUMENT_SYSTEM_PROMPT,
+        system=_CACHED_DOC_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     )
     return response.content[0].text
@@ -111,7 +114,7 @@ def check_document_readiness(document_description: str, client: anthropic.Anthro
     response = client.messages.create(
         model=AGENT_MODEL,
         max_tokens=768,
-        system=DOCUMENT_SYSTEM_PROMPT,
+        system=_CACHED_DOC_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     )
     return response.content[0].text

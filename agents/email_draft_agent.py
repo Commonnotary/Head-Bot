@@ -79,6 +79,9 @@ EMAIL_TEMPLATES = {
 }
 
 
+_CACHED_EMAIL_SYSTEM = [{"type": "text", "text": EMAIL_SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}]
+
+
 def draft_email(
     email_type: str,
     customer_name: str,
@@ -114,7 +117,7 @@ def draft_email(
     response = client.messages.create(
         model=AGENT_MODEL,
         max_tokens=1024,
-        system=EMAIL_SYSTEM_PROMPT,
+        system=_CACHED_EMAIL_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     )
     return response.content[0].text
@@ -150,7 +153,7 @@ def draft_custom_email(
     response = client.messages.create(
         model=AGENT_MODEL,
         max_tokens=1024,
-        system=EMAIL_SYSTEM_PROMPT,
+        system=_CACHED_EMAIL_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     )
     return response.content[0].text

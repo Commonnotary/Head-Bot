@@ -57,6 +57,9 @@ Guidelines:
 """
 
 
+_CACHED_EXPERT_SYSTEM = [{"type": "text", "text": EXPERT_SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}]
+
+
 def answer_apostille_question(
     question: str,
     context: dict,
@@ -93,7 +96,7 @@ def answer_apostille_question(
     response = client.messages.create(
         model=AGENT_MODEL,
         max_tokens=1024,
-        system=EXPERT_SYSTEM_PROMPT,
+        system=_CACHED_EXPERT_SYSTEM,
         messages=[{"role": "user", "content": full_question}],
     )
     return response.content[0].text
@@ -116,7 +119,7 @@ def get_country_guidance(country: str, document_types: list[str], client: anthro
     response = client.messages.create(
         model=AGENT_MODEL,
         max_tokens=1024,
-        system=EXPERT_SYSTEM_PROMPT,
+        system=_CACHED_EXPERT_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     )
     return response.content[0].text

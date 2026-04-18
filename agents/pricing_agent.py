@@ -38,6 +38,9 @@ Always invite the customer to contact us for a precise quote tailored to their s
 """
 
 
+_CACHED_PRICING_SYSTEM = [{"type": "text", "text": PRICING_SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}]
+
+
 def get_pricing_quote(
     service_type: str,
     quantity: int,
@@ -79,7 +82,7 @@ def get_pricing_quote(
     response = client.messages.create(
         model=AGENT_MODEL,
         max_tokens=768,
-        system=PRICING_SYSTEM_PROMPT,
+        system=_CACHED_PRICING_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     )
     return response.content[0].text
@@ -98,7 +101,7 @@ def recommend_service_tier(deadline_description: str, client: anthropic.Anthropi
     response = client.messages.create(
         model=AGENT_MODEL,
         max_tokens=512,
-        system=PRICING_SYSTEM_PROMPT,
+        system=_CACHED_PRICING_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     )
     return response.content[0].text

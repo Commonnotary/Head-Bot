@@ -33,6 +33,9 @@ empathetic, and solution-oriented.
 """
 
 
+_CACHED_SYSTEM = [{"type": "text", "text": INTAKE_SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}]
+
+
 def run_intake(conversation_history: list[dict], client: anthropic.Anthropic) -> str:
     """
     Run the intake agent with the current conversation history.
@@ -41,7 +44,7 @@ def run_intake(conversation_history: list[dict], client: anthropic.Anthropic) ->
     response = client.messages.create(
         model=AGENT_MODEL,
         max_tokens=1024,
-        system=INTAKE_SYSTEM_PROMPT,
+        system=_CACHED_SYSTEM,
         messages=conversation_history,
     )
     return response.content[0].text
@@ -70,7 +73,7 @@ Only return the JSON object, nothing else."""
     response = client.messages.create(
         model=AGENT_MODEL,
         max_tokens=512,
-        system="You are a data extraction assistant. Extract structured information from conversations accurately.",
+        system=[{"type": "text", "text": "You are a data extraction assistant. Extract structured information from conversations accurately.", "cache_control": {"type": "ephemeral"}}],
         messages=messages,
     )
     return response.content[0].text
