@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "description": "CNA Master Brain — Head-Bot routing logic",
+  "regions": {
+    "DMV": { "base_price": 497 },
+    "Central_VA": { "base_price": 397 },
+    "SW_VA": { "base_price": 297 }
+  },
+  "client_types": {
+    "attorney_PAP": {
+      "price": 497,
+      "override_region": true,
+      "note": "Preferred Attorney Program — flat rate all regions"
+    },
+    "standard": {
+      "use_region_price": true
+    }
+  },
+  "rush_surcharge": 75,
+  "services": [
+    "apostille",
+    "certified_translation",
+    "process_server_coordination",
+    "notarization"
+  ],
+  "escalate_to_byron": [
+    "unknown_document_type",
+    "foreign_language_document",
+    "federal_court_filing",
+    "price_dispute",
+    "VIP_attorney_contact"
+  ],
+  "bots": {
+    "intake": "handles new inquiries",
+    "qualifier": "confirms document type and region",
+    "price": "calculates and quotes",
+    "confirm": "sends confirmation and invoice",
+    "dispatch": "executes delivery and follow-up"
+  }
+}
